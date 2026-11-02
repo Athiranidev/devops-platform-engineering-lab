@@ -1,0 +1,13 @@
+- Linux Administration
+- Networking Fundamentals
+- Git and GitHub
+- Bash Scripting
+- Docker and Containerization
+- Kubernetes and Container Orchestration
+- Terraform and Infrastructure as Code
+- Ansible and Configuration Management
+- CI/CD Automation
+- AWS and Azure Cloud
+- Monitoring and Observability
+- Troubleshooting and Production Concepts
+- AI Platform Engineering
