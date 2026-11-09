@@ -563,3 +563,337 @@ I would inspect network interfaces, IP configuration, routing, DNS resolution an
 ---
 
 
+
+---
+
+## 9. TCP and UDP
+
+TCP and UDP are transport-layer protocols used for communication between applications over an IP network.
+
+### TCP — Transmission Control Protocol
+
+TCP provides:
+- Connection-oriented communication.
+- Reliable data delivery.
+- Ordered data delivery.
+- Retransmission of missing data.
+- Flow control and congestion control.
+
+TCP uses a three-way handshake:
+
+1. SYN — Client requests a connection.
+2. SYN-ACK — Server acknowledges.
+3. ACK — Client confirms.
+
+Common uses: SSH, traditional HTTP/HTTPS and database connections.
+
+### UDP — User Datagram Protocol
+
+UDP provides:
+- Connectionless communication.
+- Lower protocol overhead.
+- No built-in delivery guarantee.
+- No built-in packet ordering.
+- No built-in retransmission.
+
+Common uses: DNS queries, online gaming and real-time communication.
+
+### TCP vs UDP
+
+| Feature | TCP | UDP |
+|---|---|---|
+| Connection | Connection-oriented | Connectionless |
+| Reliability | Reliable delivery | No delivery guarantee |
+| Ordering | Preserves order | No ordering guarantee |
+| Retransmission | Built in | Not built in |
+| Overhead | Higher | Lower |
+
+---
+
+## 10. Common Network Ports
+
+A port identifies a particular application or service endpoint on a device.
+
+Think of:
+- IP address as a building address.
+- Port number as the service entry point inside that building.
+
+| Port | Protocol | Common service |
+|---:|---|---|
+| 22 | TCP | SSH |
+| 53 | UDP/TCP | DNS |
+| 67, 68 | UDP | DHCP |
+| 80 | TCP | HTTP |
+| 123 | UDP | NTP |
+| 443 | TCP | HTTPS |
+| 3306 | TCP | MySQL |
+| 5432 | TCP | PostgreSQL |
+| 6443 | TCP | Kubernetes API server |
+| 3000 | TCP | Grafana default |
+| 8080 | TCP | Common application port |
+| 9090 | TCP | Prometheus default |
+| 9100 | TCP | Node Exporter default |
+
+These are common defaults and can be changed through configuration.
+
+Note: HTTP/3 uses QUIC over UDP port 443.
+
+---
+
+## 11. Inspecting Listening Ports in Linux
+
+Command:
+
+```bash
+sudo ss -tulnp
+```
+
+Options:
+
+| Option | Meaning |
+|---|---|
+| -t | TCP sockets |
+| -u | UDP sockets |
+| -l | Listening sockets |
+| -n | Numeric addresses and ports |
+| -p | Associated processes, when permitted |
+
+### Our practical observations
+
+We inspected the actual network sockets on Ubuntu.
+
+Relevant output:
+
+```text
+tcp LISTEN 0 4096 0.0.0.0:9090 docker-proxy
+tcp LISTEN 0 4096 0.0.0.0:3000 docker-proxy
+tcp LISTEN 0 4096 [::]:9090 docker-proxy
+tcp LISTEN 0 4096 [::]:3000 docker-proxy
+```
+
+This showed Docker-published ports 3000 and 9090 listening on IPv4 and IPv6 wildcard addresses.
+
+These correspond to our Grafana and Prometheus monitoring lab ports.
+
+Other entries included:
+- Port 53: Local DNS resolver.
+- Port 5353: Multicast DNS.
+- Port 631: Printing service.
+- Port 546 UDP: DHCPv6 client.
+
+### Understanding listening addresses
+
+| Address | Meaning |
+|---|---|
+| 127.0.0.1 | IPv4 loopback only |
+| 0.0.0.0 | All local IPv4 interfaces |
+| ::1 | IPv6 loopback only |
+| [::] | IPv6 wildcard address |
+
+A service listening on 0.0.0.0 can potentially accept connections through its IPv4 interfaces, subject to firewall and network rules.
+
+It does not automatically mean that everyone on the internet can access it.
+
+For TCP, LISTEN means the socket is waiting for incoming connections. UDP commonly shows UNCONN because it is connectionless.
+
+---
+
+## 12. Port Mapping and Traffic Forwarding
+
+An application can listen on one port while users connect through another.
+
+Example:
+- User-facing port: 80.
+- Application listening port: 8080.
+
+Traffic can be forwarded from port 80 to port 8080.
+
+### Examples
+
+| Technology | Configuration |
+|---|---|
+| Docker | -p 80:8080 |
+| Kubernetes Service | port: 80, targetPort: 8080 |
+| Nginx | Listen on 80 and proxy to 8080 |
+
+Example traffic path:
+
+```text
+User
+  |
+  | Port 80
+  v
+Nginx / Port forwarding
+  |
+  | Port 8080
+  v
+Application
+```
+
+When users cannot access an application, investigate:
+1. Application listening port.
+2. Client-facing port.
+3. Docker publishing or Kubernetes Service mapping.
+4. Nginx reverse-proxy configuration.
+5. Firewall and cloud security rules.
+
+Do not immediately change application code without finding the actual failure.
+
+---
+
+## 13. HTTP vs HTTPS
+
+### HTTP
+
+HTTP stands for Hypertext Transfer Protocol.
+
+It allows clients such as browsers to communicate with web servers.
+
+Example:
+
+```text
+http://example.com
+```
+
+Default port: TCP 80.
+
+HTTP without TLS does not provide transport encryption.
+
+### HTTPS
+
+HTTPS stands for Hypertext Transfer Protocol Secure.
+
+It is HTTP protected by TLS (Transport Layer Security).
+
+Example:
+
+```text
+https://example.com
+```
+
+Default port: TCP 443 for traditional HTTP/1.1 and HTTP/2.
+
+HTTP/3 uses QUIC over UDP port 443.
+
+### What does TLS provide?
+
+- Encryption: Protects transmitted data.
+- Authentication: Helps verify the server's identity.
+- Integrity: Helps detect unauthorized data modification.
+
+### HTTP vs HTTPS
+
+| Feature | HTTP | HTTPS |
+|---|---|---|
+| Default port | 80 | 443 |
+| TLS protection | No | Yes |
+| Encryption | No TLS encryption | Yes |
+| Server certificate verification | No TLS verification | Yes |
+
+### DevOps example: Nginx TLS termination
+
+```text
+User
+  |
+  | HTTPS :443
+  v
+Nginx
+  |
+  | HTTP :8080
+  v
+Application
+```
+
+Nginx handles the HTTPS connection and forwards requests to the application.
+
+This is called TLS termination.
+
+### Common HTTPS troubleshooting problems
+
+- Port 443 is blocked.
+- Nginx is not listening on port 443.
+- TLS certificate has expired.
+- Certificate hostname does not match.
+- Incorrect certificate chain.
+- Missing or inaccessible private key.
+- Incorrect reverse-proxy configuration.
+
+If a browser reports an expired certificate, renew or replace the certificate, verify the configuration and reload the web server.
+
+The application itself may still be healthy.
+
+---
+
+## 14. Networking Troubleshooting Workflow
+
+When users cannot access an application:
+
+1. Check service status:
+
+```bash
+sudo systemctl status SERVICE_NAME
+```
+
+2. Check listening ports:
+
+```bash
+sudo ss -tulnp
+```
+
+3. Check DNS resolution:
+
+```bash
+getent hosts DOMAIN_NAME
+```
+
+4. Test network connectivity:
+
+```bash
+ping -c 4 DOMAIN_NAME
+```
+
+5. Inspect Docker, Kubernetes or Nginx port mapping.
+
+6. Check firewall rules and AWS Security Groups.
+
+7. For HTTPS failures, verify port 443 and TLS configuration.
+
+8. Fix the underlying issue and verify application availability.
+
+Do not repeatedly restart a service without investigating the root cause.
+
+---
+
+## 15. Networking Interview Revision
+
+**Q1. What is the difference between TCP and UDP?**
+
+TCP provides reliable, ordered, connection-oriented communication. UDP is connectionless and does not provide built-in delivery or ordering guarantees.
+
+**Q2. What is a network port?**
+
+A port identifies an application or service endpoint on a device.
+
+**Q3. What does 0.0.0.0 mean?**
+
+It is the IPv4 wildcard address. A service bound to it listens on all local IPv4 interfaces.
+
+**Q4. Can a service be running but inaccessible?**
+
+Yes. Firewall rules, routing, port mapping, DNS or incorrect listening addresses can prevent access.
+
+**Q5. What is the difference between HTTP and HTTPS?**
+
+HTTPS protects HTTP communication using TLS.
+
+**Q6. HTTP works but HTTPS fails. What would you investigate?**
+
+Port 443, firewall rules, TLS certificate validity, Nginx configuration and service logs.
+
+**Q7. A browser reports an expired certificate. What would you do?**
+
+Verify certificate validity, renew or replace it, install it securely, validate the configuration and reload the web server.
+
+---
+
+
